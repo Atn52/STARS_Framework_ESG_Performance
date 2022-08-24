@@ -1,0 +1,501 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+install.packages("DescTools")
+install.packages("dplyr")
+install.packages("caret")
+install.packages("ggplot2")
+install.packages("tree")
+install.packages("randomForest")
+install.packages("purrr")
+install.packages("factoextra")
+install.packages("readr")
+install.packages("ggExtra")
+```
+
+## Calling necessary packages
+```{r}
+library(DescTools)
+library(dplyr)
+library(caret)
+library(ggplot2)
+library(tree)
+library(randomForest)
+library(purrr)
+library(factoextra)
+library(readr)
+library(ggExtra)
+library(tidyverse)
+library(tidytext)
+library(widyr)
+library(igraph)
+library(ggraph)
+```
+
+
+# Read data file pima2.csv from your working directory 
+```{r}
+building <- read.csv("Building_EE.csv", na.strings = c("", " "), as.is= T)
+
+str(building)
+```
+
+#Multiple Regression
+```{r}
+summary(lm( building$STARS_Score ~ Grid_purchased_electricity_performance+	Grid_purchased_electricity_baseline	+ On.site_renewables_performance + District_steam.hot.water_performance 
+            + Energy_from_all_other_source_.performance + Total_building_energy_consumption_performance + Gross_Square_Feet
+       
+, data = building))
+
+```
+
+
+```{r}
+building %>% count (building$Intuition,sort = TRUE)
+building %>% head(10) %>% pull(initiatives)
+```
+
+## Text Analysis FOR INITIATIVES to shift attitudes in regard to energy efficiency
+```{r}
+## 1. Calculate words counts and correlations
+test <- building %>%
+  unnest_tokens(output = word,input = initiatives_to_replace_energy.consuming_appliances)%>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word,"[:alpha:]")) %>%
+  distinct()
+test
+```
+
+
+
+```{r}
+#Count Stop Words
+building %>% 
+  unnest_tokens(output = word, input = initiatives) %>%
+  count(word, sort = TRUE)
+```
+
+```{r}
+#Count_number_of_words_which_are_mentioned_more_than_20_times
+institution_who_mention_word <- test %>% 
+  count(word, name = "Institution") %>%
+  filter(Institution >=20)
+institution_who_mention_word
+```
+
+```{r}
+#Find_words_correlation
+word_correlations <- test %>%
+  semi_join(institution_who_mention_word, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= 0.2)
+```
+
+
+## Build a word network plot
+```{r}
+graph_from_data_frame(d = word_correlations, vertices = 
+                        institution_who_mention_word %>%
+                        semi_join(word_correlations, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+```
+
+## Clean up the code into a function
+```{r}
+generate_word_graph <- function(test, minimum_institution = 20,minimum_correlation = 0.2) {
+  
+  institution_who_mention_word <- test %>%
+  count(word, name = "Institution")%>%
+  filter(Institution >= minimum_institution)
+  
+  word_correlations <- test %>%
+  semi_join(institution_who_mention_word, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= minimum_correlation )
+  
+graph_from_data_frame(d = word_correlations, vertices = 
+                        institution_who_mention_word %>%
+                        semi_join(word_correlations, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+
+}
+```
+
+## Correlation >= 0.2
+```{r}
+
+
+test %>%  generate_word_graph(minimum_institution = 30,minimum_correlation = 0.2)
+
+test %>% 
+  generate_word_graph(minimum_institution = 20, minimum_correlation =0.3)
+```
+
+```{r}
+test %>% count(STARS_Score)
+
+test.low <- test %>% 
+  filter(STARS_Score <= 2)
+test.high <- test %>% 
+  filter(STARS_Score >3 )
+```
+
+```{r}
+test.low %>%  generate_word_graph(minimum_institution = 10, minimum_correlation = 0.2)
+test.high %>%  generate_word_graph(minimum_institution = 15, minimum_correlation = 0.3)
+```
+## Text Analysis FOR ENERGY USE standards and controls
+```{r}
+## 1. Calculate words counts and correlations
+test1 <- building %>%
+  unnest_tokens(output = word,input = energy_use_standards)%>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word,"[:alpha:]")) %>%
+  distinct()
+test1
+```
+
+
+```{r}
+#Count_number_of_words_which_are_mentioned_more_than_20_times
+institution_who_mention_word_1 <- test1 %>% 
+  count(word, name = "Institution") %>%
+  filter(Institution >=20)
+institution_who_mention_word_1
+```
+
+```{r}
+#Find_words_correlation
+word_correlations_1 <- test1 %>%
+  semi_join(institution_who_mention_word_1, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= 0.2)
+```
+
+
+## Build a word network plot
+```{r}
+graph_from_data_frame(d = word_correlations_1, vertices = 
+                        institution_who_mention_word_1 %>%
+                        semi_join(word_correlations_1, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+```
+
+## Clean up the code into a function
+```{r}
+generate_word_graph_1 <- function(test, minimum_institution = 20,minimum_correlation = 0.2) {
+  
+  institution_who_mention_word_1 <- test1 %>%
+  count(word, name = "Institution")%>%
+  filter(Institution >= minimum_institution)
+  
+  word_correlations_1 <- test1 %>%
+  semi_join(institution_who_mention_word_1, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= minimum_correlation )
+  
+graph_from_data_frame(d = word_correlations_1, vertices = 
+                        institution_who_mention_word_1 %>%
+                        semi_join(word_correlations_1, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+
+}
+```
+
+## Correlation >= 0.2
+```{r}
+
+
+test1 %>%  generate_word_graph(minimum_institution = 30,minimum_correlation = 0.2)
+
+test1 %>% 
+  generate_word_graph(minimum_institution = 20, minimum_correlation =0.3)
+```
+
+```{r}
+test.low.1 <- test1 %>% 
+  filter(STARS_Score <= 2)
+test.high.1 <- test1 %>% 
+  filter(STARS_Score >=3 )
+```
+
+```{r}
+test.low.1 %>%  generate_word_graph(minimum_institution = 10, minimum_correlation = 0.2)
+test.high.1 %>%  generate_word_graph(minimum_institution = 17, minimum_correlation = 0.35)
+```
+
+
+## Text Analysis FOR LED_lighting and other energy-efficient lighting strategies 
+```{r}
+## 1. Calculate words counts and correlations
+test2 <- building %>%
+  unnest_tokens(output = word,input = LED_lighting)%>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word,"[:alpha:]")) %>%
+  distinct()
+test2
+```
+
+```{r}
+#Count_number_of_words_which_are_mentioned_more_than_20_times
+institution_who_mention_word_2 <- test2 %>% 
+  count(word, name = "Institution") %>%
+  filter(Institution >=20)
+institution_who_mention_word_2
+```
+
+```{r}
+#Find_words_correlation
+word_correlations_2 <- test2 %>%
+  semi_join(institution_who_mention_word_2, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= 0.2)
+```
+
+
+## Build a word network plot
+```{r}
+graph_from_data_frame(d = word_correlations_2, vertices = 
+                        institution_who_mention_word_2 %>%
+                        semi_join(word_correlations_2, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+```
+
+## Clean up the code into a function
+```{r}
+generate_word_graph_2 <- function(test, minimum_institution = 20,minimum_correlation = 0.2) {
+  
+  institution_who_mention_word_2 <- test2 %>%
+  count(word, name = "Institution")%>%
+  filter(Institution >= minimum_institution)
+  
+  word_correlations_2 <- test2 %>%
+  semi_join(institution_who_mention_word_2, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= minimum_correlation )
+  
+graph_from_data_frame(d = word_correlations_2, vertices = 
+                        institution_who_mention_word_2 %>%
+                        semi_join(word_correlations_2, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+
+}
+```
+
+## Correlation >= 0.2
+```{r}
+test2 %>% generate_word_graph(minimum_institution = 30,minimum_correlation = 0.2)
+
+test2 %>% 
+  generate_word_graph(minimum_institution = 20, minimum_correlation =0.3)
+```
+
+```{r}
+test.low.2 <- test2 %>% 
+  filter(STARS_Score <= 2)
+test.high.2 <- test2 %>% 
+  filter(STARS_Score >=3 )
+```
+
+```{r}
+test.low.2 %>%  generate_word_graph(minimum_institution = 10, minimum_correlation = 0.2)
+test.high.2 %>%  generate_word_graph(minimum_institution = 17, minimum_correlation = 0.35)
+```
+
+
+## Text Analysis FOR passive_related_strategies 
+```{r}
+## 1. Calculate words counts and correlations
+test3 <- building %>%
+  unnest_tokens(output = word,input = passive_related_strategies)%>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word,"[:alpha:]")) %>%
+  distinct()
+test3
+```
+
+```{r}
+#Count_number_of_words_which_are_mentioned_more_than_20_times
+institution_who_mention_word_3 <- test3 %>% 
+  count(word, name = "Institution") %>%
+  filter(Institution >=20)
+institution_who_mention_word_3
+```
+
+```{r}
+#Find_words_correlation
+word_correlations_3 <- test3 %>%
+  semi_join(institution_who_mention_word_3, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= 0.2)
+```
+
+
+## Build a word network plot
+```{r}
+graph_from_data_frame(d = word_correlations_3, vertices = 
+                        institution_who_mention_word_3 %>%
+                        semi_join(word_correlations_3, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+```
+
+## Clean up the code into a function
+```{r}
+generate_word_graph_3 <- function(test, minimum_institution = 20,minimum_correlation = 0.2) {
+  
+  institution_who_mention_word_3 <- test3 %>%
+  count(word, name = "Institution")%>%
+  filter(Institution >= minimum_institution)
+  
+  word_correlations_3 <- test3 %>%
+  semi_join(institution_who_mention_word_3, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= minimum_correlation )
+  
+graph_from_data_frame(d = word_correlations_3, vertices = 
+                        institution_who_mention_word_3 %>%
+                        semi_join(word_correlations_3, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+
+}
+```
+
+## Correlation >= 0.2
+```{r}
+test3 %>%  generate_word_graph(minimum_institution = 30,minimum_correlation = 0.2)
+
+test3 %>% 
+  generate_word_graph(minimum_institution = 20, minimum_correlation =0.3)
+```
+
+```{r}
+test.low.3 <- test3 %>% 
+  filter(STARS_Score <= 2)
+test.high.3 <- test3 %>% 
+  filter(STARS_Score >=3 )
+```
+
+```{r}
+test.low.3 %>%  generate_word_graph(minimum_institution = 1, minimum_correlation = 0.2)
+test.high.3 %>%  generate_word_graph(minimum_institution = 1, minimum_correlation = 0.3)
+```
+
+## Text Analysis FOR replace energy-consuming appliances, equipment and systems with high efficiency alternatives
+```{r}
+## 1. Calculate words counts and correlations
+test4 <- building %>%
+  unnest_tokens(output = word,input = initiatives_to_replace_energy-consuming_appliances)%>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word,"[:alpha:]")) %>%
+  distinct()
+test3
+```
+
+```{r}
+#Count_number_of_words_which_are_mentioned_more_than_20_times
+institution_who_mention_word_4 <- test4 %>% 
+  count(word, name = "Institution") %>%
+  filter(Institution >=20)
+institution_who_mention_word_4
+```
+
+```{r}
+#Find_words_correlation
+word_correlations_4 <- test4 %>%
+  semi_join(institution_who_mention_word_4, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= 0.2)
+```
+
+
+## Build a word network plot
+```{r}
+graph_from_data_frame(d = word_correlations_4, vertices = 
+                        institution_who_mention_word_4 %>%
+                        semi_join(word_correlations_4, by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+```
+
+## Clean up the code into a function
+```{r}
+generate_word_graph_4 <- function(test, minimum_institution = 20,minimum_correlation = 0.2) {
+  
+  institution_who_mention_word_4 <- test4 %>%
+  count(word, name = "Institution")%>%
+  filter(Institution >= minimum_institution)
+  
+  word_correlations_4 <- test4 %>%
+  semi_join(institution_who_mention_word_4, by = "word") %>%
+  pairwise_cor(item = word, feature = Institution) %>%
+  filter(correlation >= minimum_correlation )
+  
+graph_from_data_frame(d = word_correlations_4, vertices = 
+                        institution_who_mention_word_4 %>%
+                        semi_join(word_correlations_4,by = c("word"="item1"))) %>%
+  
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha = correlation))+
+  geom_node_point() +
+  geom_node_text(aes(color = Institution, label = name), repel = TRUE)
+
+}
+```
+
+## Correlation >= 0.2
+```{r}
+test4 %>%  generate_word_graph(minimum_institution = 30,minimum_correlation = 0.2)
+
+test4 %>% 
+  generate_word_graph(minimum_institution = 20, minimum_correlation =0.3)
+```
+
+```{r}
+test.low.4 <- test4 %>% 
+  filter(STARS_Score <= 2)
+test.high.4 <- test4 %>% 
+  filter(STARS_Score >=3 )
+```
+
+```{r}
+test.low.4 %>%  generate_word_graph(minimum_institution = 1, minimum_correlation = 0.2)
+test.high.4 %>%  generate_word_graph(minimum_institution = 1, minimum_correlation = 0.3)
+```
